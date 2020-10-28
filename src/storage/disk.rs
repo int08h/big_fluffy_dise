@@ -70,6 +70,7 @@ mod test {
 
     use crate::storage::disk::DiskStorage;
     use crate::traits::{BLOCK_32, BLOCK_4096, BLOCK_512, BLOCK_64, BLOCK_8, BlockSize, StorageMethod};
+    use crate::util::tempfile::tempfile;
 
     static BLOCKS: &[BlockSize] = &[BLOCK_8, BLOCK_32, BLOCK_64, BLOCK_512, BLOCK_4096];
 

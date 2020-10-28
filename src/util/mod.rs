@@ -1,2 +1,2 @@
 #[cfg(test)]
-mod tempfile;
+pub(crate) mod tempfile;
