@@ -9,7 +9,6 @@ edition = "2018"
 [dependencies]
 
 digest = "0.9"
-blake2 = "0.9"
 blake3 = "0.3"
 sha3 = "0.9"
 rand_core = { version = "0.5", feature = "std" }

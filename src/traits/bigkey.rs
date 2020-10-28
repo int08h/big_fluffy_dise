@@ -2,8 +2,8 @@ use std::io;
 
 use digest::ExtendableOutput;
 
-use crate::storage::StorageMethod;
-use crate::types::{KeyMaterial, Locator, SecurityLevel};
+use crate::traits::storage::StorageMethod;
+use crate::traits::types::{KeyMaterial, Locator, SecurityLevel};
 
 /// A BigKey cryptographic key encapsulation scheme
 pub trait BigKey: Sized {

@@ -1,24 +1,13 @@
-//! StorageMethod defines how the big key bytes are written to permanent media.
+//! StorageMethod defines how BigKeys are read from permanent media.
 
 use std::fs::{File, Metadata};
 use std::io;
 use std::io::{Error, ErrorKind, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
-use digest::{Digest, ExtendableOutput, XofReader};
-
-use crate::types::{BlockSize, KeyMaterial, Locator, SecurityLevel};
-
-/// StorageMethod defines a persistent method of storing BigKey cryptographic material.
-pub trait StorageMethod: Sized {
-    fn open(block_size: BlockSize, storage_location: &str) -> Result<Self, io::Error>;
-
-    fn probe(&mut self, index: u64, output: &mut [u8]) -> Result<(), io::Error>;
-
-    fn big_key_length(&self) -> u64;
-
-    fn block_size(&self) -> BlockSize;
-}
+use crate::traits::storage::check_key_evenly_divisible;
+use crate::traits::StorageMethod;
+use crate::traits::types::BlockSize;
 
 /// Stores BigKey material in a file on a conventional filesystem. Assumes underlying storage
 /// medium provides efficient random access to the big key contents (think NVMe or SSD, not HDD).
@@ -74,30 +63,15 @@ impl StorageMethod for DiskStorage {
     }
 }
 
-// Ensure that the total big key length is evenly divisible by the block size (no remainder)
-fn check_key_evenly_divisible(block_size: BlockSize, key_len: u64) -> Result<(), io::Error> {
-    if (key_len % block_size.byte_len as u64) != 0 {
-        let msg = format!(
-            "{:?} does not evenly divide key length {}",
-            block_size, key_len
-        );
-        Err(Error::new(ErrorKind::InvalidInput, msg))
-    } else {
-        Ok(())
-    }
-}
-
 #[cfg(test)]
 mod test {
     use std::fs::File;
     use std::io::{Error, ErrorKind, Write};
 
-    use crate::storage::DiskStorage;
-    use crate::storage::StorageMethod;
-    use crate::tempfile::tempfile;
-    use crate::types::{BlockSize, BLOCK_32, BLOCK_4096, BLOCK_512, BLOCK_64, BLOCK_8};
+    use crate::storage::disk::DiskStorage;
+    use crate::traits::{BLOCK_32, BLOCK_4096, BLOCK_512, BLOCK_64, BLOCK_8, BlockSize, StorageMethod};
 
-    const BLOCKS: &[BlockSize] = &[BLOCK_8, BLOCK_32, BLOCK_64, BLOCK_512, BLOCK_4096];
+    static BLOCKS: &[BlockSize] = &[BLOCK_8, BLOCK_32, BLOCK_64, BLOCK_512, BLOCK_4096];
 
     #[test]
     fn open_succeeds_when_size_matches() {

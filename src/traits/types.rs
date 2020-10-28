@@ -15,23 +15,23 @@ pub struct BlockSize {
     pub byte_len: usize,
 }
 
-pub const BLOCK_8: BlockSize = BlockSize {
+pub static BLOCK_8: BlockSize = BlockSize {
     bit_len: 8,
     byte_len: 1,
 };
-pub const BLOCK_32: BlockSize = BlockSize {
+pub static BLOCK_32: BlockSize = BlockSize {
     bit_len: 32,
     byte_len: 4,
 };
-pub const BLOCK_64: BlockSize = BlockSize {
+pub static BLOCK_64: BlockSize = BlockSize {
     bit_len: 64,
     byte_len: 8,
 };
-pub const BLOCK_512: BlockSize = BlockSize {
+pub static BLOCK_512: BlockSize = BlockSize {
     bit_len: 512,
     byte_len: 64,
 };
-pub const BLOCK_4096: BlockSize = BlockSize {
+pub static BLOCK_4096: BlockSize = BlockSize {
     bit_len: 4096,
     byte_len: 512,
 };
