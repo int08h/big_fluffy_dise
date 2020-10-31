@@ -5,8 +5,9 @@ use std::io;
 use std::io::{Error, ErrorKind, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
-use crate::traits::storage::check_key_evenly_divisible;
-use crate::traits::StorageMethod;
+use crate::storage::StorageWriter;
+use crate::storage::traits::StorageReader;
+use crate::storage::util::check_key_evenly_divisible;
 use crate::traits::types::BlockSize;
 
 /// Stores BigKey material in a file on a conventional filesystem. Assumes underlying storage
@@ -19,10 +20,32 @@ pub struct DiskStorage {
     big_key_file: File,
 }
 
-impl StorageMethod for DiskStorage {
-    fn open(block_size: BlockSize, storage_location: &str) -> Result<DiskStorage, io::Error> {
-        let big_key_file = File::open(storage_location)?;
-        let big_key_length = big_key_file.metadata()?.len();
+// Differentiate which trait DiskStorage is implementing
+enum IoMode {
+    READ,
+    WRITE,
+}
+
+impl DiskStorage {
+    fn new(
+        block_size: BlockSize,
+        storage_location: &str,
+        expected_size: Option<usize>,
+        mode: IoMode,
+    ) -> Result<DiskStorage, io::Error> {
+        let big_key_file: File;
+        let big_key_length: u64;
+
+        match mode {
+            IoMode::READ => {
+                big_key_file = File::open(storage_location)?;
+                big_key_length = big_key_file.metadata()?.len();
+            }
+            IoMode::WRITE => {
+                big_key_file = File::create(storage_location)?;
+                big_key_length = expected_size.unwrap() as u64;
+            }
+        }
 
         if let Err(e) = check_key_evenly_divisible(block_size, big_key_length) {
             return Err(e);
@@ -33,6 +56,12 @@ impl StorageMethod for DiskStorage {
             big_key_length,
             big_key_file,
         })
+    }
+}
+
+impl StorageReader for DiskStorage {
+    fn open(block_size: BlockSize, storage_location: &str) -> Result<DiskStorage, io::Error> {
+        DiskStorage::new(block_size, storage_location, None, IoMode::READ)
     }
 
     fn probe(&mut self, index: u64, output: &mut [u8]) -> Result<(), Error> {
@@ -63,13 +92,69 @@ impl StorageMethod for DiskStorage {
     }
 }
 
+impl StorageWriter for DiskStorage {
+    fn new_writer(
+        block_size: BlockSize,
+        storage_location: &str,
+        expected_size: usize,
+    ) -> Result<Self, Error> {
+        if expected_size < block_size.byte_len {
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                "expected_size < block_size",
+            ));
+        }
+
+        DiskStorage::new(
+            block_size,
+            storage_location,
+            Some(expected_size),
+            IoMode::WRITE,
+        )
+    }
+
+    fn block_size(&self) -> BlockSize {
+        self.block_size
+    }
+
+    fn expected_big_key_length(&self) -> u64 {
+        self.big_key_length
+    }
+
+    fn finalize(&mut self) -> Result<(), Error> {
+        self.flush()?;
+
+        let metadata = self.big_key_file.metadata()?;
+
+        if metadata.len() != self.big_key_length {
+            Err(Error::new(
+                ErrorKind::InvalidData,
+                "failed to write expected length",
+            ))
+        } else {
+            Ok(())
+        }
+    }
+}
+
+impl Write for DiskStorage {
+    fn write(&mut self, buf: &[u8]) -> Result<usize, io::Error> {
+        self.big_key_file.write(buf)
+    }
+
+    fn flush(&mut self) -> Result<(), io::Error> {
+        self.big_key_file.flush()
+    }
+}
+
 #[cfg(test)]
 mod test {
     use std::fs::File;
     use std::io::{Error, ErrorKind, Write};
 
+    use crate::storage::{StorageReader, StorageWriter};
     use crate::storage::disk::DiskStorage;
-    use crate::traits::{BLOCK_32, BLOCK_4096, BLOCK_512, BLOCK_64, BLOCK_8, BlockSize, StorageMethod};
+    use crate::traits::{BLOCK_32, BLOCK_4096, BLOCK_512, BLOCK_64, BLOCK_8, BlockSize};
     use crate::util::tempfile::tempfile;
 
     static BLOCKS: &[BlockSize] = &[BLOCK_8, BLOCK_32, BLOCK_64, BLOCK_512, BLOCK_4096];
@@ -85,7 +170,7 @@ mod test {
 
         match DiskStorage::open(BLOCK_32, tmp.to_str()) {
             Ok(storage) => assert_eq!(storage.big_key_length(), 2048),
-            Err(e) => panic!("consistent size didn't pass"),
+            Err(e) => panic!("consistent size didn't pass {}", e),
         }
     }
 
@@ -191,6 +276,42 @@ mod test {
                 Err(e) => {
                     assert_eq!(e.kind(), ErrorKind::InvalidInput);
                     assert!(e.to_string().contains("out of bounds"));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn probe_buffer_length_not_same_as_block_length_fails() {
+        for block_size in BLOCKS {
+            let tmp = tempfile();
+            let data = [0x99].repeat(block_size.byte_len);
+            {
+                let mut ofile = File::create(tmp.as_path()).unwrap();
+                ofile.write_all(&data).unwrap();
+            }
+
+            let mut storage = DiskStorage::open(*block_size, tmp.to_str()).unwrap();
+            let mut buf = [0x00].repeat(block_size.byte_len - 1);
+
+            match storage.probe(1, &mut buf) {
+                Ok(_) => panic!("expected output != block length"),
+                Err(e) => {
+                    assert_eq!(e.kind(), ErrorKind::InvalidInput);
+                    assert!(e.to_string().contains("!= block length"));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn expected_size_must_be_ge_block_size() {
+        for block in BLOCKS {
+            match DiskStorage::new_writer(*block, "/", 0) {
+                Ok(_) => panic!("expected a zero length key to be rejected"),
+                Err(e) => {
+                    assert_eq!(e.kind(), ErrorKind::InvalidInput);
+                    assert!(e.to_string().contains("expected_size < block_size"));
                 }
             }
         }

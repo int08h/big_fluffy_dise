@@ -8,7 +8,7 @@ pub enum SecurityLevel {
     Bits256 = 256,
 }
 
-/// Native and atomic unit of storage
+/// Native unit of capacity for a given StorageMethod.
 #[derive(Debug, Copy, Clone)]
 pub struct BlockSize {
     pub bit_len: usize,
@@ -41,5 +41,3 @@ pub type Locator = Box<[u8]>;
 
 /// Sensitive/secret cryptographic information; treat with caution!
 pub type KeyMaterial = Box<[u8]>;
-
-// pub type XOF<T:  Digest + ExtendableOutput>

@@ -2,7 +2,7 @@ use std::io;
 
 use digest::ExtendableOutput;
 
-use crate::traits::storage::StorageMethod;
+use crate::storage::StorageReader;
 use crate::traits::types::{KeyMaterial, Locator, SecurityLevel};
 
 /// A BigKey cryptographic key encapsulation scheme
@@ -10,7 +10,7 @@ pub trait BigKey: Sized {
     fn new_big_key(
         security_level: SecurityLevel,
         leakage_tolerance: f32,
-        storage_scheme: impl StorageMethod,
+        storage_scheme: impl StorageReader,
         xof: impl ExtendableOutput,
     ) -> Self;
 
