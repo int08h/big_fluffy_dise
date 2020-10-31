@@ -11,8 +11,10 @@ use crate::traits::KeyMaterial;
 // Minimum acceptable seed length in bytes
 const MIN_SEED_LENGTH: usize = 32;
 
-// Maximum output size the generator can produce in bytes
-const MAX_OUTPUT_LENGTH: usize = 1;
+// Shake256 has no restriction on output length. We'll arbitrarily limit it at 2^64 which would
+// be a very large BigKey indeed. See the SHA3 standard for details:
+//   https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.202.pdf#page=31
+const MAX_OUTPUT_LENGTH: usize = u64::max_value() as usize;
 
 /// Generate the contents of a BigKey using Shake256 from SHA3
 pub struct Shake256Generator {
@@ -35,14 +37,16 @@ impl BigKeyGenerator for Shake256Generator {
         let seed = optional_seed.expect("an initial seed value is required");
         let mut generator = Shake256Generator::from_seed(&seed)?;
 
-        let mut buf: Vec<u8> = Vec::with_capacity(storage_method.block_size().byte_len);
+        let mut buf = vec![0u8; storage_method.block_size().byte_len];
         let mut total_written = 0usize;
 
         while total_written < length_bytes {
             generator.fill_bytes(buf.as_mut_slice())?;
-            storage_method.write_all(buf.as_slice())?;
-            total_written += buf.len();
+            storage_method.write_all(&buf)?;
+            total_written += buf.capacity();
         }
+
+        storage_method.finalize()?;
 
         Ok(())
     }
@@ -69,9 +73,14 @@ impl Shake256Generator {
 
 #[cfg(test)]
 mod test {
-    use std::io::ErrorKind;
+    use std::fs::File;
+    use std::io::{Error, ErrorKind, Read};
 
     use crate::generation::shake256::Shake256Generator;
+    use crate::generation::traits::BigKeyGenerator;
+    use crate::storage::{DiskStorage, StorageWriter};
+    use crate::traits::BLOCK_8;
+    use crate::util::tempfile::tempfile;
 
     #[test]
     fn shake_256_known_answer_test() {
@@ -97,5 +106,22 @@ mod test {
         } else {
             panic!("expected seed too short, but didn't get it");
         }
+    }
+
+    #[test]
+    fn generate_known_answer_test() {
+        let seed = b"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_vec();
+        let expected = [0x5a, 0x81, 0x82, 0xc1, 0xe3, 0x72, 0x89, 0xf4];
+
+        let tmp = tempfile();
+        let mut storage = DiskStorage::new_writer(BLOCK_8, tmp.to_str(), 8).unwrap();
+
+        Shake256Generator::generate(&mut storage, Some(seed.into_boxed_slice()), 8).unwrap();
+
+        let mut infile = File::open(tmp.as_path()).unwrap();
+        let mut buf = [0u8; 8];
+        infile.read_exact(buf.as_mut()).unwrap();
+
+        assert_eq!(buf, expected);
     }
 } // mod test

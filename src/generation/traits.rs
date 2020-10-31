@@ -1,6 +1,6 @@
 use std::io;
 
-use crate::storage::{StorageReader, StorageWriter};
+use crate::storage::StorageWriter;
 use crate::traits::KeyMaterial;
 
 /// A Cryptographically secure random number generator that can be used to generate BigKey material.

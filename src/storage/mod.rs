@@ -1,3 +1,4 @@
+pub use disk::DiskStorage;
 pub use traits::StorageReader;
 pub use traits::StorageWriter;
 
