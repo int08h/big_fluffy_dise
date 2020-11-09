@@ -7,6 +7,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 const TEMP_PREFIX: &str = "big_fluffy_dise_";
 
+#[cfg(test)]
 pub(crate) fn tempfile() -> TempFile {
     let mut tmp = std::env::temp_dir();
     tmp.push(format!("{}{}", TEMP_PREFIX, timestamp()));

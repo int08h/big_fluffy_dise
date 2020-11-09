@@ -1,12 +1,11 @@
-use std::io;
-use std::io::{Error, ErrorKind, Read};
+use std::io::{Error, Read};
 
 use digest::{Digest, ExtendableOutput, Update};
 use sha3::{Sha3XofReader, Shake256};
 
 use crate::generation::traits::BigKeyGenerator;
 use crate::storage::{StorageReader, StorageWriter};
-use crate::traits::KeyMaterial;
+use crate::traits::{BigKeyError, KeyMaterial};
 
 // Minimum acceptable seed length in bytes
 const MIN_SEED_LENGTH: usize = 32;
@@ -26,15 +25,15 @@ impl BigKeyGenerator for Shake256Generator {
         storage_method: &mut impl StorageWriter,
         optional_seed: Option<KeyMaterial>,
         length_bytes: usize,
-    ) -> Result<(), Error> {
+    ) -> Result<(), BigKeyError> {
         if length_bytes > MAX_OUTPUT_LENGTH {
-            return Err(io::Error::new(
-                ErrorKind::InvalidInput,
-                "output length too long",
-            ));
+            return Err(BigKeyError::OutputLengthTooLong {
+                out_len: length_bytes,
+                max_len: MAX_OUTPUT_LENGTH,
+            });
         }
 
-        let seed = optional_seed.expect("an initial seed value is required");
+        let seed = optional_seed.unwrap();
         let mut generator = Shake256Generator::from_seed(&seed)?;
 
         let mut buf = vec![0u8; storage_method.block_size().byte_len];
@@ -53,9 +52,12 @@ impl BigKeyGenerator for Shake256Generator {
 }
 
 impl Shake256Generator {
-    fn from_seed(seed: &[u8]) -> Result<Self, io::Error> {
+    fn from_seed(seed: &[u8]) -> Result<Self, BigKeyError> {
         if seed.len() < MIN_SEED_LENGTH {
-            return Err(io::Error::new(ErrorKind::InvalidInput, "seed too short"));
+            return Err(BigKeyError::SeedTooShort {
+                seed_len: seed.len(),
+                req_len: MIN_SEED_LENGTH,
+            });
         }
 
         let mut hash = Shake256::default();
@@ -79,7 +81,7 @@ mod test {
     use crate::generation::shake256::Shake256Generator;
     use crate::generation::traits::BigKeyGenerator;
     use crate::storage::{DiskStorage, StorageWriter};
-    use crate::traits::BLOCK_8;
+    use crate::traits::{BigKeyError, BLOCK_8};
     use crate::util::tempfile::tempfile;
 
     #[test]
@@ -89,22 +91,20 @@ mod test {
         let expected = [0x5a, 0x81, 0x82, 0xc1, 0xe3, 0x72, 0x89, 0xf4];
 
         let mut buf = [0u8; 8];
-        gen.fill_bytes(buf.as_mut());
+        gen.fill_bytes(buf.as_mut()).unwrap();
         assert_eq!(buf, expected);
 
         // Second fill must be different
-        gen.fill_bytes(buf.as_mut());
+        gen.fill_bytes(buf.as_mut()).unwrap();
         assert_ne!(buf, expected);
     }
 
     #[test]
     fn shake_256_short_seed_fails() {
-        let seed = b"too short";
-        if let Err(e) = Shake256Generator::from_seed(seed) {
-            assert_eq!(e.kind(), ErrorKind::InvalidInput);
-            assert!(e.to_string().contains("too short"));
-        } else {
-            panic!("expected seed too short, but didn't get it");
+        let seed = b"01234".to_vec();
+        match Shake256Generator::from_seed(&seed) {
+            Err(BigKeyError::SeedTooShort { .. }) => {}
+            _ => panic!("expected seed too short, but didn't get it"),
         }
     }
 

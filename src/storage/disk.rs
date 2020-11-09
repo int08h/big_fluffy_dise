@@ -5,10 +5,11 @@ use std::io;
 use std::io::{Error, ErrorKind, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
-use crate::storage::StorageWriter;
 use crate::storage::traits::StorageReader;
 use crate::storage::util::check_key_evenly_divisible;
+use crate::storage::StorageWriter;
 use crate::traits::types::BlockSize;
+use crate::traits::BigKeyError;
 
 /// Stores BigKey material in a file on a conventional filesystem. Assumes underlying storage
 /// medium provides efficient random access to the big key contents (think NVMe or SSD, not HDD).
@@ -32,7 +33,7 @@ impl DiskStorage {
         storage_location: &str,
         expected_size: Option<usize>,
         mode: IoMode,
-    ) -> Result<DiskStorage, io::Error> {
+    ) -> Result<DiskStorage, BigKeyError> {
         let big_key_file: File;
         let big_key_length: u64;
 
@@ -60,21 +61,26 @@ impl DiskStorage {
 }
 
 impl StorageReader for DiskStorage {
-    fn open(block_size: BlockSize, storage_location: &str) -> Result<DiskStorage, io::Error> {
+    fn open(block_size: BlockSize, storage_location: &str) -> Result<DiskStorage, BigKeyError> {
         DiskStorage::new(block_size, storage_location, None, IoMode::READ)
     }
 
-    fn probe(&mut self, index: u64, output: &mut [u8]) -> Result<(), Error> {
+    fn probe(&mut self, index: u64, output: &mut [u8]) -> Result<(), BigKeyError> {
         if output.len() != self.block_size.byte_len {
-            return Err(Error::new(
-                ErrorKind::InvalidInput,
-                "output buffer != block length",
-            ));
+            return Err(BigKeyError::ProbeBufferNotEqBlockSize {
+                out_buf_len: output.len(),
+                block_len: self.block_size.byte_len,
+            });
         }
 
         let offset = index * self.block_size.byte_len as u64;
+
         if offset + self.block_size.byte_len as u64 > self.big_key_length {
-            return Err(Error::new(ErrorKind::InvalidInput, "out of bounds"));
+            return Err(BigKeyError::ProbeOffsetOutOfBounds {
+                end_of_key: self.big_key_length as usize,
+                offset: offset as usize,
+                probe_len: self.block_size.byte_len,
+            });
         }
 
         self.big_key_file.seek(SeekFrom::Start(offset))?;
@@ -97,12 +103,12 @@ impl StorageWriter for DiskStorage {
         block_size: BlockSize,
         storage_location: &str,
         expected_size: usize,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, BigKeyError> {
         if expected_size < block_size.byte_len {
-            return Err(Error::new(
-                ErrorKind::InvalidInput,
-                "expected_size < block_size",
-            ));
+            return Err(BigKeyError::OutputLengthTooShort {
+                out_len: expected_size,
+                min_len: block_size.byte_len,
+            });
         }
 
         DiskStorage::new(
@@ -121,16 +127,16 @@ impl StorageWriter for DiskStorage {
         self.big_key_length
     }
 
-    fn finalize(&mut self) -> Result<(), Error> {
+    fn finalize(&mut self) -> Result<(), BigKeyError> {
         self.flush()?;
 
         let metadata = self.big_key_file.metadata()?;
 
         if metadata.len() != self.big_key_length {
-            Err(Error::new(
-                ErrorKind::InvalidData,
-                "failed to write expected length",
-            ))
+            return Err(BigKeyError::FailedToWriteBigKey {
+                expected_len: self.big_key_length as usize,
+                wrote_len: metadata.len() as usize,
+            });
         } else {
             Ok(())
         }
@@ -152,10 +158,13 @@ mod test {
     use std::fs::File;
     use std::io::{Error, ErrorKind, Write};
 
-    use crate::storage::{StorageReader, StorageWriter};
     use crate::storage::disk::DiskStorage;
-    use crate::traits::{BLOCK_32, BLOCK_4096, BLOCK_512, BLOCK_64, BLOCK_8, BlockSize};
+    use crate::storage::{StorageReader, StorageWriter};
+    use crate::traits::{
+        BigKeyError, BlockSize, BLOCK_32, BLOCK_4096, BLOCK_512, BLOCK_64, BLOCK_8,
+    };
     use crate::util::tempfile::tempfile;
+    use std::io;
 
     static BLOCKS: &[BlockSize] = &[BLOCK_8, BLOCK_32, BLOCK_64, BLOCK_512, BLOCK_4096];
 
@@ -178,8 +187,8 @@ mod test {
     fn open_fails_if_file_doesnt_exist() {
         let tmp = tempfile();
         match DiskStorage::open(BLOCK_32, tmp.to_str()) {
-            Ok(_) => panic!("open() should have failed as {:?} didn't exist", tmp),
-            Err(e) => assert_eq!(e.kind(), ErrorKind::NotFound),
+            Err(BigKeyError::IoError(e)) => assert_eq!(e.kind(), ErrorKind::NotFound),
+            _ => panic!("open() should have failed as {:?} didn't exist", tmp),
         }
     }
 
@@ -195,14 +204,11 @@ mod test {
         // Skip BLOCK_8 since it's a single byte and by definition evenly divides everything
         for block_size in vec![BLOCK_32, BLOCK_64, BLOCK_512, BLOCK_4096] {
             match DiskStorage::open(block_size, tmp.to_str()) {
-                Ok(_) => panic!(
+                Err(BigKeyError::KeyLengthIndivisible { .. }) => {}
+                _ => panic!(
                     "expected {:?} to fail due to uneven key file size",
                     block_size
                 ),
-                Err(e) => {
-                    assert_eq!(e.kind(), ErrorKind::InvalidInput);
-                    assert!(e.to_string().contains("does not evenly divide"));
-                }
             }
         }
     }
@@ -272,11 +278,8 @@ mod test {
             let mut unused = [0x00].repeat(block_size.byte_len);
 
             match storage.probe(1, &mut unused) {
-                Ok(_) => panic!("expected an index out of bounds error"),
-                Err(e) => {
-                    assert_eq!(e.kind(), ErrorKind::InvalidInput);
-                    assert!(e.to_string().contains("out of bounds"));
-                }
+                Err(BigKeyError::ProbeOffsetOutOfBounds { .. }) => {}
+                _ => panic!("expected an index out of bounds error"),
             }
         }
     }
@@ -295,11 +298,8 @@ mod test {
             let mut buf = [0x00].repeat(block_size.byte_len - 1);
 
             match storage.probe(1, &mut buf) {
-                Ok(_) => panic!("expected output != block length"),
-                Err(e) => {
-                    assert_eq!(e.kind(), ErrorKind::InvalidInput);
-                    assert!(e.to_string().contains("!= block length"));
-                }
+                Err(BigKeyError::ProbeBufferNotEqBlockSize { .. }) => {}
+                _ => panic!("expected output != block length"),
             }
         }
     }
@@ -308,11 +308,8 @@ mod test {
     fn expected_size_must_be_ge_block_size() {
         for block in BLOCKS {
             match DiskStorage::new_writer(*block, "/", 0) {
-                Ok(_) => panic!("expected a zero length key to be rejected"),
-                Err(e) => {
-                    assert_eq!(e.kind(), ErrorKind::InvalidInput);
-                    assert!(e.to_string().contains("expected_size < block_size"));
-                }
+                Err(BigKeyError::OutputLengthTooShort { .. }) => {}
+                _ => panic!("expected a zero length key to be rejected"),
             }
         }
     }

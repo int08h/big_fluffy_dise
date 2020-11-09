@@ -1,7 +1,7 @@
 use std::io;
 
 use crate::storage::StorageWriter;
-use crate::traits::KeyMaterial;
+use crate::traits::{BigKeyError, KeyMaterial};
 
 /// A Cryptographically secure random number generator that can be used to generate BigKey material.
 ///
@@ -12,5 +12,5 @@ pub trait BigKeyGenerator {
         storage_method: &mut impl StorageWriter,
         seed: Option<KeyMaterial>,
         length_bytes: usize,
-    ) -> Result<(), io::Error>;
+    ) -> Result<(), BigKeyError>;
 }

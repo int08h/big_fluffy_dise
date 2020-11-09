@@ -4,6 +4,7 @@ use digest::ExtendableOutput;
 
 use crate::storage::StorageReader;
 use crate::traits::types::{KeyMaterial, Locator, SecurityLevel};
+use crate::traits::BigKeyError;
 
 /// A BigKey cryptographic key encapsulation scheme
 pub trait BigKey: Sized {
@@ -14,7 +15,7 @@ pub trait BigKey: Sized {
         xof: impl ExtendableOutput,
     ) -> Self;
 
-    fn get_key(self, locator: &Locator) -> Result<KeyMaterial, io::Error>;
+    fn get_key(self, locator: &Locator) -> Result<KeyMaterial, BigKeyError>;
 
-    fn new_key(self, security_level: SecurityLevel) -> Result<(Locator, KeyMaterial), io::Error>;
+    fn new_key(self, security_level: SecurityLevel) -> Result<(Locator, KeyMaterial), BigKeyError>;
 }
