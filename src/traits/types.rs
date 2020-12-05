@@ -35,6 +35,14 @@ pub static BLOCK_4096: BlockSize = BlockSize {
     bit_len: 4096,
     byte_len: 512,
 };
+pub static BLOCK_4K: BlockSize = BlockSize {
+    bit_len: 32768,
+    byte_len: 4096,
+};
+
+pub static BLOCKS: [BlockSize; 6] = [
+    BLOCK_8, BLOCK_32, BLOCK_64, BLOCK_512, BLOCK_4096, BLOCK_4K
+];
 
 /// An opaque locator into a BigKey
 pub type Locator = Box<[u8]>;

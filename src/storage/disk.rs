@@ -160,13 +160,10 @@ mod test {
 
     use crate::storage::disk::DiskStorage;
     use crate::storage::{StorageReader, StorageWriter};
-    use crate::traits::{
-        BigKeyError, BlockSize, BLOCK_32, BLOCK_4096, BLOCK_512, BLOCK_64, BLOCK_8,
-    };
+    use crate::traits::{ BigKeyError, BlockSize, BLOCKS, BLOCK_32 };
     use crate::util::tempfile::tempfile;
     use std::io;
 
-    static BLOCKS: &[BlockSize] = &[BLOCK_8, BLOCK_32, BLOCK_64, BLOCK_512, BLOCK_4096];
 
     #[test]
     fn open_succeeds_when_size_matches() {
@@ -202,8 +199,8 @@ mod test {
         }
 
         // Skip BLOCK_8 since it's a single byte and by definition evenly divides everything
-        for block_size in vec![BLOCK_32, BLOCK_64, BLOCK_512, BLOCK_4096] {
-            match DiskStorage::open(block_size, tmp.to_str()) {
+        for block_size in BLOCKS[1..].iter() {
+            match DiskStorage::open(*block_size, tmp.to_str()) {
                 Err(BigKeyError::KeyLengthIndivisible { .. }) => {}
                 _ => panic!(
                     "expected {:?} to fail due to uneven key file size",
@@ -217,7 +214,7 @@ mod test {
     fn opened_file_reports_correct_size() {
         let filler = b"0123456789abcdef";
 
-        for block_size in BLOCKS {
+        for block_size in BLOCKS.iter() {
             let tmp = tempfile();
             let data = filler.repeat(block_size.byte_len);
             {
@@ -236,7 +233,7 @@ mod test {
     #[test]
     fn successfully_read_blocks_in_random_order() {
         let tmp = tempfile();
-        for block_size in BLOCKS {
+        for block_size in BLOCKS.iter() {
             let data1 = [0x11].repeat(block_size.byte_len);
             let data2 = [0x22].repeat(block_size.byte_len);
             let data3 = [0x33].repeat(block_size.byte_len);
@@ -266,7 +263,7 @@ mod test {
 
     #[test]
     fn attempt_to_read_past_end_of_file_fails() {
-        for block_size in BLOCKS {
+        for block_size in BLOCKS.iter() {
             let tmp = tempfile();
             let data = [0x88].repeat(block_size.byte_len);
             {
@@ -286,7 +283,7 @@ mod test {
 
     #[test]
     fn probe_buffer_length_not_same_as_block_length_fails() {
-        for block_size in BLOCKS {
+        for block_size in BLOCKS.iter() {
             let tmp = tempfile();
             let data = [0x99].repeat(block_size.byte_len);
             {
@@ -306,7 +303,7 @@ mod test {
 
     #[test]
     fn expected_size_must_be_ge_block_size() {
-        for block in BLOCKS {
+        for block in BLOCKS.iter() {
             match DiskStorage::new_writer(*block, "/", 0) {
                 Err(BigKeyError::OutputLengthTooShort { .. }) => {}
                 _ => panic!("expected a zero length key to be rejected"),
