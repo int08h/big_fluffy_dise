@@ -1,4 +1,3 @@
-use std::io;
 use std::io::Write;
 
 use crate::traits::{BigKeyError, BlockSize};
@@ -21,7 +20,7 @@ pub trait StorageReader: Sized {
     fn block_size(&self) -> BlockSize;
 }
 
-/// StrageWriter generates a new BigKey
+/// StorageWriter generates a new BigKey
 pub trait StorageWriter: Sized + Write {
     fn new_writer(
         block_size: BlockSize,
@@ -35,5 +34,6 @@ pub trait StorageWriter: Sized + Write {
     /// Total BigKey length in bytes
     fn expected_big_key_length(&self) -> u64;
 
+    /// Perform any finalization and flush the BigKey
     fn finalize(&mut self) -> Result<(), BigKeyError>;
 }

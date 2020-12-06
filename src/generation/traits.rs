@@ -1,5 +1,3 @@
-use std::io;
-
 use crate::storage::StorageWriter;
 use crate::traits::{BigKeyError, KeyMaterial};
 

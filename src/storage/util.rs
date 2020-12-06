@@ -1,6 +1,3 @@
-use std::io;
-use std::io::{Error, ErrorKind};
-
 use crate::traits::{BigKeyError, BlockSize};
 
 // Ensure that the total big key length is evenly divisible by the block size (no remainder)

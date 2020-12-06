@@ -15,33 +15,29 @@ pub struct BlockSize {
     pub byte_len: usize,
 }
 
-pub static BLOCK_8: BlockSize = BlockSize {
+pub const BLOCK_8: BlockSize = BlockSize {
     bit_len: 8,
     byte_len: 1,
 };
-pub static BLOCK_32: BlockSize = BlockSize {
+pub const BLOCK_32: BlockSize = BlockSize {
     bit_len: 32,
     byte_len: 4,
 };
-pub static BLOCK_64: BlockSize = BlockSize {
+pub const BLOCK_64: BlockSize = BlockSize {
     bit_len: 64,
     byte_len: 8,
 };
-pub static BLOCK_512: BlockSize = BlockSize {
-    bit_len: 512,
-    byte_len: 64,
+pub const BLOCK_1K: BlockSize = BlockSize {
+    bit_len: 8192,
+    byte_len: 1024,
 };
-pub static BLOCK_4096: BlockSize = BlockSize {
-    bit_len: 4096,
-    byte_len: 512,
-};
-pub static BLOCK_4K: BlockSize = BlockSize {
+pub const BLOCK_4K: BlockSize = BlockSize {
     bit_len: 32768,
     byte_len: 4096,
 };
 
-pub static BLOCKS: [BlockSize; 6] = [
-    BLOCK_8, BLOCK_32, BLOCK_64, BLOCK_512, BLOCK_4096, BLOCK_4K
+pub const BLOCKS: [BlockSize; 5] = [
+    BLOCK_8, BLOCK_32, BLOCK_64, BLOCK_1K, BLOCK_4K
 ];
 
 /// An opaque locator into a BigKey

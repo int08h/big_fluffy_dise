@@ -1,10 +1,10 @@
 use std::io::{Error, Read};
 
-use digest::{Digest, ExtendableOutput, Update};
+use digest::{ExtendableOutput, Update};
 use sha3::{Sha3XofReader, Shake256};
 
 use crate::generation::traits::BigKeyGenerator;
-use crate::storage::{StorageReader, StorageWriter};
+use crate::storage::StorageWriter;
 use crate::traits::{BigKeyError, KeyMaterial};
 
 // Minimum acceptable seed length in bytes
@@ -82,7 +82,7 @@ mod test {
     use crate::generation::traits::BigKeyGenerator;
     use crate::storage::{DiskStorage, StorageWriter};
     use crate::traits::{BigKeyError, BLOCK_8};
-    use crate::util::tempfile::tempfile;
+    use crate::storage::tempfile::tempfile;
 
     #[test]
     fn shake_256_known_answer_test() {

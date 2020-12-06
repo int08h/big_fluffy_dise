@@ -1,9 +1,8 @@
 //! StorageMethod defines how BigKeys are read from permanent media.
 
-use std::fs::{File, Metadata};
+use std::fs::{File};
 use std::io;
-use std::io::{Error, ErrorKind, Read, Seek, SeekFrom, Write};
-use std::path::Path;
+use std::io::{Read, Seek, SeekFrom, Write};
 
 use crate::storage::traits::StorageReader;
 use crate::storage::util::check_key_evenly_divisible;
@@ -160,10 +159,9 @@ mod test {
 
     use crate::storage::disk::DiskStorage;
     use crate::storage::{StorageReader, StorageWriter};
-    use crate::traits::{ BigKeyError, BlockSize, BLOCKS, BLOCK_32 };
-    use crate::util::tempfile::tempfile;
+    use crate::traits::{BigKeyError, BlockSize, BLOCKS, BLOCK_32};
+    use crate::storage::tempfile::tempfile;
     use std::io;
-
 
     #[test]
     fn open_succeeds_when_size_matches() {
