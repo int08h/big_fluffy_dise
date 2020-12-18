@@ -1,8 +1,11 @@
 use std::str::FromStr;
 
 use big_fluffy_dise::generation::{BigKeyGenerator, Shake256Generator};
-use big_fluffy_dise::storage::{DiskStorage, StorageWriter};
-use big_fluffy_dise::traits::BLOCK_4K;
+use big_fluffy_dise::storage::{DiskStorage, StorageWriter, StorageReader};
+use big_fluffy_dise::traits::{BLOCK_4K, SecurityLevel};
+use big_fluffy_dise::kem::{BigKey, BigKeyKem};
+use sha3::{Sha3_256, Digest};
+use std::hash::Hasher;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -23,5 +26,13 @@ fn main() {
         size_bytes as usize,
     ).unwrap();
 
-    println!("Done.");
+    let reader = DiskStorage::open(BLOCK_4K, key_file).unwrap();
+    let mut h = Sha3_256::new();
+
+        let bk = BigKey::new_big_key(SecurityLevel::Bits128, 0.20, &reader, &mut h);
+        match bk.new_key(SecurityLevel::Bits128) {
+            Ok(_) => {}
+            Err(_) => {}
+        };
+        println!("Done.");
 }

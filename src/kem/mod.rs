@@ -1,3 +1,3 @@
-pub use bigkey::BigKeyKem;
+pub use bigkey::{BigKey, BigKeyKem};
 
 mod bigkey;
